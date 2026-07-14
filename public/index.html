@@ -38,7 +38,7 @@
 
   header {
     width: 100%;
-    max-width: 760px;
+    max-width: 420px;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -51,13 +51,10 @@
 
   .boards {
     width: 100%;
-    max-width: 760px;
+    max-width: 420px;
     display: grid;
     grid-template-columns: 1fr;
     gap: 20px;
-  }
-  @media (min-width: 640px) {
-    .boards { grid-template-columns: 1fr 1fr; }
   }
 
   .board {
@@ -76,8 +73,7 @@
     background: var(--accent);
     opacity: 0.85;
   }
-  .board.gym    { --accent: var(--amber); }
-  .board.futsal { --accent: var(--green); }
+  .board.gym { --accent: var(--amber); }
 
   .board-head {
     display: flex;
@@ -176,23 +172,6 @@
   <section class="board gym" id="board-gym" data-loc="gym">
     <div class="board-head">
       <h2>체육관</h2>
-      <div class="status"><span class="dot"></span><span class="status-text">연결 대기</span></div>
-    </div>
-    <div class="sport"></div>
-    <div class="num-wrap">
-      <span class="num-ghost">88</span>
-      <span class="num">--</span>
-    </div>
-    <div class="unit">현재 인원 (명)</div>
-    <div class="zones"></div>
-    <div class="chart-label"><span>최근 6시간</span><span class="chart-max"></span></div>
-    <canvas class="chart" width="320" height="56"></canvas>
-    <div class="updated">업데이트 기록 없음</div>
-  </section>
-
-  <section class="board futsal" id="board-futsal" data-loc="futsal">
-    <div class="board-head">
-      <h2>풋살장</h2>
       <div class="status"><span class="dot"></span><span class="status-text">연결 대기</span></div>
     </div>
     <div class="sport"></div>

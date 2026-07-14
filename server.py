@@ -1,5 +1,5 @@
 # ============================================
-# 체육관/풋살장 모니터링 서버 (최종본)
+# 체육관 모니터링 서버 (최종본)
 # - 라즈베리파이가 보낸 프레임을 AI 모델로 분석 (종목 + 인원수)
 # - 이미지는 분석 즉시 폐기, 결과 숫자만 SQLite에 기록
 # - 실시간 현황판 + 시간대별 기록 API 제공
@@ -23,8 +23,7 @@ RECORD_INTERVAL = 60            # DB 기록 최소 간격(초) — 같은 장소
 
 # ---------- 실시간 상태 (메모리) ----------
 state = {
-    "gym":    {"name": "체육관", "count": None, "sport": None, "zones": {}, "updatedAt": None},
-    "futsal": {"name": "풋살장", "count": None, "sport": None, "zones": {}, "updatedAt": None},
+    "gym": {"name": "체육관", "count": None, "sport": None, "zones": {}, "updatedAt": None},
 }
 lock = threading.Lock()
 _last_record = {}  # 장소별 마지막 DB 기록 시각
@@ -138,27 +137,6 @@ def receive_frame():
 
     print(f"[frame] {location}: {count}명, 종목={sport}, 추론 {elapsed:.2f}s")
     return jsonify(ok=True, count=count, sport=sport, inference_sec=round(elapsed, 2))
-
-
-@app.route("/api/update", methods=["POST"])
-def receive_numbers():
-    """숫자 직접 전송 경로 (풋살장 ESP32용)"""
-    data = request.get_json(silent=True) or {}
-    if data.get("key") != API_KEY:
-        return jsonify(ok=False, error="invalid key"), 401
-    location = data.get("location")
-    if location not in state:
-        return jsonify(ok=False, error="unknown location"), 400
-    count = data.get("count")
-    if not isinstance(count, (int, float)) or count < 0:
-        return jsonify(ok=False, error="bad count"), 400
-
-    with lock:
-        state[location].update(count=int(count), sport=data.get("sport"),
-                               zones=data.get("zones") or {},
-                               updatedAt=int(time.time() * 1000))
-    record_result(location, int(count), data.get("sport"))
-    return jsonify(ok=True)
 
 
 @app.route("/api/status")
