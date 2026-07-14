@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>운동장 현황판</title>
+<style>
+  /* 체육관 전광판(스코어보드) 콘셉트 */
+  @font-face {
+    font-family: 'DSEG7';
+    src: url('https://cdnjs.cloudflare.com/ajax/libs/dseg/0.46.0/fonts/DSEG7-Classic/DSEG7Classic-Bold.woff2') format('woff2');
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #0c0f13;
+    --panel: #151a21;
+    --line: #262d37;
+    --amber: #ffb020;
+    --green: #4ade80;
+    --dim: #8b95a3;
+    --text: #e8ecf1;
+    --off: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Pretendard', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 14px;
+    margin-bottom: 28px;
+  }
+  header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+  header .clock { font-family: 'DSEG7', monospace; font-size: 15px; color: var(--dim); }
+
+  .boards {
+    width: 100%;
+    max-width: 760px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  @media (min-width: 640px) {
+    .boards { grid-template-columns: 1fr 1fr; }
+  }
+
+  .board {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 22px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .board::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+    opacity: 0.85;
+  }
+  .board.gym    { --accent: var(--amber); }
+  .board.futsal { --accent: var(--green); }
+
+  .board-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .board-head h2 { font-size: 16px; font-weight: 700; }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+  .online .dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  /* 종목 배지 */
+  .sport {
+    text-align: center;
+    min-height: 24px;
+    margin-bottom: 2px;
+  }
+  .sport span {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+  }
+
+  .num-wrap {
+    position: relative;
+    text-align: center;
+    padding: 12px 0 6px;
+    font-family: 'DSEG7', monospace;
+    font-size: clamp(64px, 18vw, 96px);
+    line-height: 1;
+  }
+  .num-ghost { color: var(--text); opacity: 0.05; }
+  .num {
+    position: absolute;
+    inset: 12px 0 6px;
+    color: var(--accent);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+  .offline .num { color: var(--dim); text-shadow: none; }
+
+  .unit { text-align: center; font-size: 13px; color: var(--dim); margin-bottom: 14px; }
+
+  .zones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    min-height: 20px;
+  }
+  .zone {
+    font-size: 13px;
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .zone b { color: var(--accent); font-weight: 700; }
+
+  /* 시간대별 그래프 */
+  .chart-label {
+    margin-top: 16px;
+    font-size: 11px;
+    color: var(--dim);
+    display: flex;
+    justify-content: space-between;
+  }
+  canvas.chart {
+    width: 100%;
+    height: 56px;
+    display: block;
+    margin-top: 6px;
+  }
+
+  .updated {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  footer { margin-top: 32px; font-size: 12px; color: var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>운동장 현황판</h1>
+  <div class="clock" id="clock">--:--</div>
+</header>
+
+<div class="boards">
+  <section class="board gym" id="board-gym" data-loc="gym">
+    <div class="board-head">
+      <h2>체육관</h2>
+      <div class="status"><span class="dot"></span><span class="status-text">연결 대기</span></div>
+    </div>
+    <div class="sport"></div>
+    <div class="num-wrap">
+      <span class="num-ghost">88</span>
+      <span class="num">--</span>
+    </div>
+    <div class="unit">현재 인원 (명)</div>
+    <div class="zones"></div>
+    <div class="chart-label"><span>최근 6시간</span><span class="chart-max"></span></div>
+    <canvas class="chart" width="320" height="56"></canvas>
+    <div class="updated">업데이트 기록 없음</div>
+  </section>
+
+  <section class="board futsal" id="board-futsal" data-loc="futsal">
+    <div class="board-head">
+      <h2>풋살장</h2>
+      <div class="status"><span class="dot"></span><span class="status-text">연결 대기</span></div>
+    </div>
+    <div class="sport"></div>
+    <div class="num-wrap">
+      <span class="num-ghost">88</span>
+      <span class="num">--</span>
+    </div>
+    <div class="unit">현재 인원 (명)</div>
+    <div class="zones"></div>
+    <div class="chart-label"><span>최근 6시간</span><span class="chart-max"></span></div>
+    <canvas class="chart" width="320" height="56"></canvas>
+    <div class="updated">업데이트 기록 없음</div>
+  </section>
+</div>
+
+<footer>실시간 5초 · 그래프 1분마다 갱신</footer>
+
+<script>
+const ZONE_LABELS = { badminton: '배드민턴', basketball: '농구' };
+
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+// ---------- 실시간 현황 ----------
+function render(id, data) {
+  const el = document.getElementById('board-' + id);
+  if (!el) return;
+
+  el.classList.toggle('online', data.online);
+  el.classList.toggle('offline', !data.online);
+
+  el.querySelector('.status-text').textContent = data.online ? '작동 중' : '오프라인';
+  el.querySelector('.num').textContent = data.count === null ? '--' : data.count;
+
+  const sportEl = el.querySelector('.sport');
+  sportEl.innerHTML = data.sport ? `<span>지금 ${data.sport} 중</span>` : '';
+
+  const zonesEl = el.querySelector('.zones');
+  zonesEl.innerHTML = '';
+  for (const [zone, n] of Object.entries(data.zones || {})) {
+    const chip = document.createElement('span');
+    chip.className = 'zone';
+    chip.innerHTML = `${ZONE_LABELS[zone] || zone} <b>${n}</b>`;
+    zonesEl.appendChild(chip);
+  }
+
+  el.querySelector('.updated').textContent = data.updatedAt
+    ? `마지막 업데이트 ${fmtTime(data.updatedAt)}`
+    : '업데이트 기록 없음';
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    for (const id of Object.keys(data)) render(id, data[id]);
+  } catch (e) { console.error(e); }
+}
+
+// ---------- 시간대별 그래프 (canvas 직접 그리기) ----------
+async function drawChart(el) {
+  const loc = el.dataset.loc;
+  const canvas = el.querySelector('canvas.chart');
+  const maxLabel = el.querySelector('.chart-max');
+  const accent = getComputedStyle(el).getPropertyValue('--accent').trim();
+
+  let rows = [];
+  try {
+    rows = await (await fetch(`/api/history?location=${loc}&hours=6`)).json();
+  } catch (e) { return; }
+
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  if (rows.length < 2) {
+    maxLabel.textContent = '기록 없음';
+    return;
+  }
+
+  const counts = rows.map(r => r.count);
+  const max = Math.max(...counts, 1);
+  maxLabel.textContent = `최대 ${max}명`;
+
+  const t0 = rows[0].ts, t1 = rows[rows.length - 1].ts;
+  const x = ts => (ts - t0) / Math.max(t1 - t0, 1) * (W - 4) + 2;
+  const y = c => H - 4 - (c / max) * (H - 10);
+
+  // 채움 영역
+  ctx.beginPath();
+  ctx.moveTo(x(rows[0].ts), H);
+  rows.forEach(r => ctx.lineTo(x(r.ts), y(r.count)));
+  ctx.lineTo(x(t1), H);
+  ctx.closePath();
+  ctx.fillStyle = accent + '22';
+  ctx.fill();
+
+  // 라인
+  ctx.beginPath();
+  rows.forEach((r, i) => i === 0 ? ctx.moveTo(x(r.ts), y(r.count)) : ctx.lineTo(x(r.ts), y(r.count)));
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function refreshCharts() {
+  document.querySelectorAll('.board').forEach(drawChart);
+}
+
+function tickClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+}
+
+refresh();
+refreshCharts();
+tickClock();
+setInterval(refresh, 5000);
+setInterval(refreshCharts, 60000);
+setInterval(tickClock, 10000);
+</script>
+</body>
+</html>
