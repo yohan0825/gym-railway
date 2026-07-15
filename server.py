@@ -59,6 +59,20 @@ def record_result(location, count, sport):
     conn.commit()
     conn.close()
 
+def manual_recorder_loop():
+    """수동 모드일 때는 값이 안 바뀌어도 RECORD_INTERVAL마다 현재값을 계속 기록해서
+    그래프가 항상 '기록 없음'으로 멈춰있지 않도록 함"""
+    while True:
+        time.sleep(RECORD_INTERVAL)
+        with lock:
+            snapshot = [(loc_id, loc["count"], loc["sport"])
+                        for loc_id, loc in state.items()
+                        if loc.get("manual") and loc["count"] is not None]
+        for loc_id, count, sport in snapshot:
+            record_result(loc_id, count, sport)
+
+threading.Thread(target=manual_recorder_loop, daemon=True).start()
+
 # ---------- AI 모델 ----------
 # 친구 모델 파일(best.pt)을 서버 폴더에 두면 자동 로드. 없으면 더미 모드.
 MODEL_PATH = os.environ.get("MODEL_PATH", "best.pt")
