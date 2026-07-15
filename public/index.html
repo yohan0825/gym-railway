@@ -159,6 +159,68 @@
   }
 
   footer { margin-top: 32px; font-size: 12px; color: var(--dim); }
+
+  /* 숨김 입력 패널 */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 16px;
+  }
+  .overlay.open { display: flex; }
+  .panel {
+    width: 100%;
+    max-width: 340px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .panel h3 { font-size: 15px; margin-bottom: 16px; }
+  .panel label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 6px; }
+  .panel input[type="password"], .panel input[type="number"] {
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: #0e1217;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .panel .sports { display: flex; flex-wrap: wrap; gap: 6px; }
+  .panel .sports label {
+    flex: 1 1 auto;
+    margin: 0;
+    text-align: center;
+    padding: 8px 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .panel .sports input { display: none; }
+  .panel .sports label:has(input:checked) { border-color: var(--amber); color: var(--amber); font-weight: 700; }
+  .panel button {
+    width: 100%;
+    margin-top: 16px;
+    padding: 11px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .panel .btn-save { background: var(--amber); color: #1a1300; }
+  .panel .btn-auto { background: transparent; border: 1px solid var(--line); color: var(--dim); margin-top: 8px; }
+  .panel .btn-close { background: transparent; border: none; color: var(--dim); margin-top: 8px; font-weight: 400; }
+  .panel .msg { margin-top: 10px; font-size: 12px; text-align: center; min-height: 16px; }
+  .panel .msg.ok { color: var(--green); }
+  .panel .msg.err { color: var(--off); }
 </style>
 </head>
 <body>
@@ -188,6 +250,30 @@
 </div>
 
 <footer>실시간 5초 · 그래프 1분마다 갱신</footer>
+
+<div class="overlay" id="overlay">
+  <div class="panel">
+    <h3>현황 수동 입력</h3>
+    <label for="pw">비밀번호</label>
+    <input type="password" id="pw" autocomplete="off">
+
+    <label for="count">현재 인원 (명)</label>
+    <input type="number" id="count" min="0" value="0">
+
+    <label>종목</label>
+    <div class="sports">
+      <label><input type="radio" name="sport" value="">없음</label>
+      <label><input type="radio" name="sport" value="배드민턴">배드민턴</label>
+      <label><input type="radio" name="sport" value="농구">농구</label>
+      <label><input type="radio" name="sport" value="배드민턴&농구">배드민턴&농구</label>
+    </div>
+
+    <button class="btn-save" id="panelSave">저장 (수동 모드로 표시)</button>
+    <button class="btn-auto" id="panelAuto">AI 자동 모드로 전환</button>
+    <button class="btn-close" id="panelClose">닫기</button>
+    <div class="msg" id="panelMsg"></div>
+  </div>
+</div>
 
 <script>
 const ZONE_LABELS = { badminton: '배드민턴', basketball: '농구' };
@@ -293,6 +379,84 @@ tickClock();
 setInterval(refresh, 5000);
 setInterval(refreshCharts, 60000);
 setInterval(tickClock, 10000);
+
+// ---------- 숨김 수동 입력 패널 (제목 5번 연속 클릭으로 열림) ----------
+(function () {
+  const overlay = document.getElementById('overlay');
+  const pwEl = document.getElementById('pw');
+  const countEl = document.getElementById('count');
+  const msgEl = document.getElementById('panelMsg');
+  let clicks = 0, clickTimer = null;
+
+  document.querySelector('header h1').addEventListener('click', () => {
+    clicks++;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => { clicks = 0; }, 1500);
+    if (clicks >= 5) {
+      clicks = 0;
+      openPanel();
+    }
+  });
+
+  function openPanel() {
+    const saved = localStorage.getItem('adminKey');
+    if (saved) pwEl.value = saved;
+    msgEl.textContent = '';
+    overlay.classList.add('open');
+  }
+
+  document.getElementById('panelClose').addEventListener('click', () => {
+    overlay.classList.remove('open');
+  });
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+
+  function showMsg(text, ok) {
+    msgEl.textContent = text;
+    msgEl.className = 'msg ' + (ok ? 'ok' : 'err');
+  }
+
+  function selectedSport() {
+    const el = document.querySelector('input[name="sport"]:checked');
+    return el ? el.value : '';
+  }
+
+  async function sendManual(body) {
+    const res = await fetch('/api/manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  document.getElementById('panelSave').addEventListener('click', async () => {
+    const key = pwEl.value;
+    if (!key) { showMsg('비밀번호를 입력하세요', false); return; }
+    localStorage.setItem('adminKey', key);
+    try {
+      const data = await sendManual({
+        key, location: 'gym', mode: 'manual',
+        count: Number(countEl.value) || 0,
+        sport: selectedSport() || null,
+      });
+      if (data.ok) { showMsg('저장됨 · 수동 모드로 표시 중', true); refresh(); }
+      else showMsg('실패: ' + (data.error || '알 수 없는 오류'), false);
+    } catch (e) { showMsg('네트워크 오류', false); }
+  });
+
+  document.getElementById('panelAuto').addEventListener('click', async () => {
+    const key = pwEl.value;
+    if (!key) { showMsg('비밀번호를 입력하세요', false); return; }
+    localStorage.setItem('adminKey', key);
+    try {
+      const data = await sendManual({ key, location: 'gym', mode: 'auto' });
+      if (data.ok) { showMsg('AI 자동 모드로 전환됨', true); refresh(); }
+      else showMsg('실패: ' + (data.error || '알 수 없는 오류'), false);
+    } catch (e) { showMsg('네트워크 오류', false); }
+  });
+})();
 </script>
 </body>
 </html>

@@ -17,13 +17,15 @@ from flask import Flask, request, jsonify, send_from_directory
 app = Flask(__name__, static_folder="public", static_url_path="")
 
 API_KEY = os.environ.get("API_KEY", "change-this-key")
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "change-this-admin-key")   # 수동 입력 전용 비밀번호 (API_KEY와 별개)
 STALE_SEC = 120                 # 2분간 업데이트 없으면 오프라인 표시
 DB_PATH = os.environ.get("DB_PATH", "records.db")
 RECORD_INTERVAL = 60            # DB 기록 최소 간격(초) — 같은 장소는 1분에 1번만 기록
+VALID_SPORTS = {"배드민턴", "농구", "배드민턴&농구"}
 
 # ---------- 실시간 상태 (메모리) ----------
 state = {
-    "gym": {"name": "체육관", "count": None, "sport": None, "zones": {}, "updatedAt": None},
+    "gym": {"name": "체육관", "count": None, "sport": None, "zones": {}, "updatedAt": None, "manual": False},
 }
 lock = threading.Lock()
 _last_record = {}  # 장소별 마지막 DB 기록 시각
@@ -116,6 +118,10 @@ def receive_frame():
     if location not in state:
         return jsonify(ok=False, error="unknown location"), 400
 
+    if state[location].get("manual"):
+        # 관리자가 수동 입력 모드로 전환해둔 상태 → AI 분석 결과로 덮어쓰지 않음
+        return jsonify(ok=True, skipped="manual mode active")
+
     file = request.files.get("frame")
     if file is None:
         return jsonify(ok=False, error="no frame"), 400
@@ -137,6 +143,41 @@ def receive_frame():
 
     print(f"[frame] {location}: {count}명, 종목={sport}, 추론 {elapsed:.2f}s")
     return jsonify(ok=True, count=count, sport=sport, inference_sec=round(elapsed, 2))
+
+
+@app.route("/api/manual", methods=["POST"])
+def manual_input():
+    """관리자 수동 입력: 인원수/종목을 직접 지정 (AI 분석 대신 표시)"""
+    data = request.get_json(silent=True) or {}
+    if data.get("key") != ADMIN_KEY:
+        return jsonify(ok=False, error="invalid key"), 401
+
+    location = data.get("location", "gym")
+    if location not in state:
+        return jsonify(ok=False, error="unknown location"), 400
+
+    mode = data.get("mode", "manual")
+    if mode == "auto":
+        # 수동 모드 해제 → 다음 프레임부터 다시 AI 분석 결과를 반영
+        with lock:
+            state[location]["manual"] = False
+        return jsonify(ok=True, manual=False)
+
+    sport = data.get("sport")
+    if sport not in VALID_SPORTS and sport is not None:
+        return jsonify(ok=False, error="invalid sport"), 400
+
+    try:
+        count = int(data.get("count", 0))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error="invalid count"), 400
+
+    with lock:
+        state[location].update(count=count, sport=sport, manual=True,
+                               updatedAt=int(time.time() * 1000))
+    record_result(location, count, sport)
+
+    return jsonify(ok=True, manual=True, count=count, sport=sport)
 
 
 @app.route("/api/status")
