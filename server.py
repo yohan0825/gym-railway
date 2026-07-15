@@ -25,7 +25,7 @@ VALID_SPORTS = {"배드민턴", "농구", "배드민턴&농구"}
 
 # ---------- 실시간 상태 (메모리) ----------
 state = {
-    "gym": {"name": "체육관", "count": None, "sport": None, "zones": {}, "updatedAt": None, "manual": False},
+    "gym": {"name": "체육관", "count": None, "sport": None, "zones": {}, "updatedAt": None, "manual": False, "onlineOverride": True},
 }
 lock = threading.Lock()
 _last_record = {}  # 장소별 마지막 DB 기록 시각
@@ -172,12 +172,14 @@ def manual_input():
     except (TypeError, ValueError):
         return jsonify(ok=False, error="invalid count"), 400
 
+    online = bool(data.get("online", True))
+
     with lock:
-        state[location].update(count=count, sport=sport, manual=True,
+        state[location].update(count=count, sport=sport, manual=True, onlineOverride=online,
                                updatedAt=int(time.time() * 1000))
     record_result(location, count, sport)
 
-    return jsonify(ok=True, manual=True, count=count, sport=sport)
+    return jsonify(ok=True, manual=True, count=count, sport=sport, online=online)
 
 
 @app.route("/api/status")
@@ -187,8 +189,12 @@ def status():
     out = {}
     with lock:
         for loc_id, loc in state.items():
-            stale = loc["updatedAt"] is None or now - loc["updatedAt"] > STALE_SEC * 1000
-            out[loc_id] = {**loc, "online": not stale}
+            if loc.get("manual"):
+                online = loc.get("onlineOverride", True)
+            else:
+                stale = loc["updatedAt"] is None or now - loc["updatedAt"] > STALE_SEC * 1000
+                online = not stale
+            out[loc_id] = {**loc, "online": online}
     return jsonify(out)
 
 
