@@ -7,6 +7,7 @@
 # ============================================
 import os
 import time
+import json
 import sqlite3
 import threading
 
@@ -23,6 +24,13 @@ DB_PATH = os.environ.get("DB_PATH", "records.db")
 RECORD_INTERVAL = 60            # DB 기록 최소 간격(초) — 같은 장소는 1분에 1번만 기록
 VALID_SPORTS = {"배드민턴", "농구", "배드민턴&농구"}
 MISS_STREAK_LIMIT = 2            # 연속 이 횟수만큼 0명이 나와야 진짜 0명으로 반영 (그 전엔 마지막 값 유지, 잠깐 인식 못한 것 무시)
+
+# 친구가 만든 YOLO 인원수 인식 서버(웹소켓). trycloudflare 임시 터널이라 친구가 재시작하면
+# 주소가 바뀜 — 바뀌면 코드 수정 없이 Railway Variables의 WS_SOURCE_URL만 새로 넣으면 됨.
+WS_SOURCE_URL = os.environ.get(
+    "WS_SOURCE_URL",
+    "wss://conservation-map-menu-bedroom.trycloudflare.com/ws?role=viewer",
+)
 
 # ---------- 실시간 상태 (메모리) ----------
 state = {
@@ -73,7 +81,47 @@ def manual_recorder_loop():
         for loc_id, count, sport in snapshot:
             record_result(loc_id, count, sport)
 
+# ---------- 친구 YOLO 인원수 인식 서버 연동 ----------
+def apply_person_count(location, count):
+    """친구 서버가 인식한 person 개수를 인원수에 반영 (종목은 건드리지 않음, 수동 모드면 무시)"""
+    with lock:
+        prev = state.get(location)
+        if prev is None or prev.get("manual"):
+            return
+        if count == 0 and prev["count"] is not None:
+            streak = _miss_streak.get(location, 0) + 1
+            _miss_streak[location] = streak
+            if streak < MISS_STREAK_LIMIT:
+                count = prev["count"]
+        else:
+            _miss_streak[location] = 0
+        state[location]["count"] = count
+        state[location]["updatedAt"] = int(time.time() * 1000)
+        sport = state[location]["sport"]
+    record_result(location, count, sport)
+
+def person_feed_loop():
+    """친구 서버 웹소켓(wss://.../ws?role=viewer)에 붙어서 person 탐지 개수를 실시간 반영"""
+    if not WS_SOURCE_URL:
+        return
+    import websocket  # websocket-client 패키지
+
+    while True:
+        try:
+            ws = websocket.create_connection(WS_SOURCE_URL, timeout=10)
+            print(f"[인원수-연동] 연결됨: {WS_SOURCE_URL}")
+            while True:
+                msg = json.loads(ws.recv())
+                if msg.get("type") != "frame":
+                    continue
+                count = sum(1 for d in msg.get("detections", []) if d.get("className") == "person")
+                apply_person_count("gym", count)
+        except Exception as e:
+            print(f"[인원수-연동] 연결 끊김/오류: {e} → 3초 후 재연결")
+            time.sleep(3)
+
 threading.Thread(target=manual_recorder_loop, daemon=True).start()
+threading.Thread(target=person_feed_loop, daemon=True).start()
 
 # ---------- AI 모델 ----------
 # 친구 모델 파일(best.pt)을 서버 폴더에 두면 자동 로드. 없으면 더미 모드.
