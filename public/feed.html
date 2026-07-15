@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>feed</title>
+<style>
+  body {
+    background: #0c0f13;
+    color: #8b95a3;
+    font-family: -apple-system, 'Malgun Gothic', sans-serif;
+    font-size: 13px;
+    padding: 16px;
+  }
+  video { max-width: 280px; display: block; margin-top: 10px; }
+  #status { margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<input type="file" id="file" accept="video/*">
+<video id="video" muted playsinline></video>
+<canvas id="cap" style="display:none;"></canvas>
+<div id="status">파일을 선택하세요</div>
+
+<script>
+// 친구 서버의 카메라 프레임 수신 엔드포인트. main.js와 동일한 /ws (역할 파라미터 없음).
+// 친구 터널 주소가 바뀌면 여기도 같이 바꿔야 함 (server.py의 WS_SOURCE_URL 호스트와 동일하게).
+const WS_URL = 'wss://conservation-map-menu-bedroom.trycloudflare.com/ws';
+const SEND_INTERVAL_MS = 400;
+const JPEG_QUALITY = 0.6;
+
+const fileEl = document.getElementById('file');
+const video = document.getElementById('video');
+const canvas = document.getElementById('cap');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const statusEl = document.getElementById('status');
+
+let ws = null;
+let sendTimer = null;
+
+function setStatus(t) { statusEl.textContent = t; }
+
+function stop() {
+  if (sendTimer) clearInterval(sendTimer);
+  sendTimer = null;
+  if (ws) { ws.close(); ws = null; }
+}
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    setStatus('연결됨 · 전송 중');
+    sendTimer = setInterval(sendFrame, SEND_INTERVAL_MS);
+  };
+  ws.onclose = () => setStatus('연결 종료');
+  ws.onerror = () => setStatus('웹소켓 오류');
+}
+
+function sendFrame() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!video.videoWidth) return;
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    blob.arrayBuffer().then((buf) => {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(buf);
+    });
+  }, 'image/jpeg', JPEG_QUALITY);
+}
+
+fileEl.addEventListener('change', () => {
+  const file = fileEl.files[0];
+  if (!file) return;
+  stop();
+  video.src = URL.createObjectURL(file);
+  video.loop = true;
+  video.play();
+  setStatus('재생 중 · 연결 시도...');
+  connect();
+});
+</script>
+</body>
+</html>
