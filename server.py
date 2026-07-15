@@ -17,7 +17,7 @@ from flask import Flask, request, jsonify, send_from_directory
 app = Flask(__name__, static_folder="public", static_url_path="")
 
 API_KEY = os.environ.get("API_KEY", "change-this-key")
-ADMIN_KEY = os.environ.get("ADMIN_KEY", "change-this-admin-key")   # 수동 입력 전용 비밀번호 (API_KEY와 별개)
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "5050")   # 수동 입력 전용 비밀번호 (API_KEY와 별개)
 STALE_SEC = 120                 # 2분간 업데이트 없으면 오프라인 표시
 DB_PATH = os.environ.get("DB_PATH", "records.db")
 RECORD_INTERVAL = 60            # DB 기록 최소 간격(초) — 같은 장소는 1분에 1번만 기록
