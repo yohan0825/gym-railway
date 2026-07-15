@@ -276,6 +276,7 @@
 
     <button class="btn-save" id="panelSave">저장 (수동 모드로 표시)</button>
     <button class="btn-auto" id="panelAuto">AI 자동 모드로 전환</button>
+    <button class="btn-auto" id="panelReset">그래프 기록 초기화</button>
     <button class="btn-close" id="panelClose">닫기</button>
     <div class="msg" id="panelMsg"></div>
   </div>
@@ -465,6 +466,23 @@ setInterval(tickClock, 10000);
     try {
       const data = await sendManual({ key, location: 'gym', mode: 'auto' });
       if (data.ok) { showMsg('AI 자동 모드로 전환됨', true); refresh(); }
+      else showMsg('실패: ' + (data.error || '알 수 없는 오류'), false);
+    } catch (e) { showMsg('네트워크 오류', false); }
+  });
+
+  document.getElementById('panelReset').addEventListener('click', async () => {
+    const key = pwEl.value;
+    if (!key) { showMsg('비밀번호를 입력하세요', false); return; }
+    if (!confirm('그래프 기록을 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+    localStorage.setItem('adminKey', key);
+    try {
+      const res = await fetch('/api/reset-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, location: 'gym' }),
+      });
+      const data = await res.json();
+      if (data.ok) { showMsg('그래프 기록 초기화됨', true); refreshCharts(); }
       else showMsg('실패: ' + (data.error || '알 수 없는 오류'), false);
     } catch (e) { showMsg('네트워크 오류', false); }
   });

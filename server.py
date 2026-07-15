@@ -182,6 +182,26 @@ def manual_input():
     return jsonify(ok=True, manual=True, count=count, sport=sport, online=online)
 
 
+@app.route("/api/reset-history", methods=["POST"])
+def reset_history():
+    """장난/오입력 등으로 남은 기록 그래프 초기화 (해당 location의 records 전체 삭제)"""
+    data = request.get_json(silent=True) or {}
+    if data.get("key") != ADMIN_KEY:
+        return jsonify(ok=False, error="invalid key"), 401
+
+    location = data.get("location", "gym")
+    if location not in state:
+        return jsonify(ok=False, error="unknown location"), 400
+
+    conn = db()
+    conn.execute("DELETE FROM records WHERE location=?", (location,))
+    conn.commit()
+    conn.close()
+    _last_record.pop(location, None)
+
+    return jsonify(ok=True)
+
+
 @app.route("/api/status")
 def status():
     """실시간 현황 조회 (웹페이지 폴링용)"""
